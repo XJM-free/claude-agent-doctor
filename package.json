@@ -1,0 +1,51 @@
+{
+  "name": "claude-agent-doctor",
+  "version": "0.1.0",
+  "description": "Lint your Claude Code sessions. Zero tokens, zero network. Catches cost leaks and agent loops before you do.",
+  "type": "module",
+  "bin": {
+    "doctor": "./bin/doctor"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "PATHOLOGY.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --target=node --outdir=dist --format=esm",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "prepare": "bun run build",
+    "link": "bun link"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "claude-code",
+    "lint",
+    "static-analysis",
+    "ai-agent",
+    "cost-optimization",
+    "observability",
+    "llm-cost",
+    "pathology"
+  ],
+  "author": "XJM-free",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/XJM-free/claude-agent-doctor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/XJM-free/claude-agent-doctor/issues"
+  },
+  "homepage": "https://github.com/XJM-free/claude-agent-doctor#readme",
+  "engines": {
+    "node": ">=18"
+  }
+}

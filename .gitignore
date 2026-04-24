@@ -1,0 +1,8 @@
+node_modules/
+dist/
+bun.lock
+.DS_Store
+*.log
+.env
+.env.local
+.claude/settings.local.json
