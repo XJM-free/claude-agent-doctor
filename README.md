@@ -1,7 +1,11 @@
 # claude-agent-doctor
 
-> **Lint your Claude Code sessions.**
-> Static analysis on `~/.claude/projects/*.jsonl` — zero tokens, zero network, catches cost leaks and agent loops before you do.
+> **Your Claude Code had a bad week? This tool tells you why.**
+>
+> Scans your local Claude Code session logs (`~/.claude/projects/*.jsonl`)
+> and flags 12 common problems: money wasted on Opus, agents stuck in loops,
+> sessions that cost $6K without you noticing. You apply the fixes by hand.
+> Zero tokens, zero network.
 
 [![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
@@ -10,40 +14,42 @@
 
 ---
 
-## Why
+## When you'd want this
 
-Your Claude Code subagents write every turn to `~/.claude/projects/`. If
-nothing reads those logs, your only feedback loop is the end-of-month
-invoice. By then, the expensive habit is already 30 days old.
+- Your Claude bill or Max usage feels higher than last week and you can't tell why.
+- You opened a session this morning, came back after lunch, and it's still going.
+- You run multiple subagents and couldn't tell me which one eats the most.
+- `/cost` shows the current session. You want to know the last 7 days.
 
-`doctor` is a static analyzer. It reads the same local JSONL files that
-[agent-ledger](https://github.com/XJM-free/claude-agent-ledger) reports on,
-but instead of showing you totals it looks for *patterns you probably want
-to fix*. The patterns are documented in [PATHOLOGY.md](PATHOLOGY.md) — think
-of it as a lint rule catalog, with a mechanism and a copy-paste fix for each
-rule.
+If none of those sound like you, you probably don't need it yet.
 
-- **Zero tokens.** No LLM is called, ever. It's grep + arithmetic.
-- **Zero network.** Nothing leaves your machine.
-- **Zero surprise.** Each finding names a rule in `PATHOLOGY.md`; you can
-  read the rule and decide for yourself.
-
-## Install
+## 30 seconds from install to first finding
 
 ```bash
 npm install -g claude-agent-doctor
-# or: bun install -g claude-agent-doctor
+doctor check
 ```
 
-## Quick start
+That's it. It reads the JSONL files Claude Code already writes locally,
+runs them through 12 rules (full catalog: [PATHOLOGY.md](PATHOLOGY.md)),
+and for each rule that fires prints:
+
+- **which session / which agent** triggered it
+- **evidence from your own data** — real numbers, not guesses
+- **a one-paragraph fix** you can copy-paste
+
+No API calls. Nothing uploaded. Nothing on your machine changes — doctor
+just reads and prints.
+
+## All the commands
 
 ```bash
 doctor check                  # scan the last 7 days
 doctor check --days 30        # scan the last month
 doctor check <session-id>     # deep-scan one session
-doctor explain                # browse the catalog (8 pathologies)
+doctor explain                # browse the catalog (12 pathologies)
 doctor explain BASH_STORM     # one pathology, in detail
-doctor suggest-routing        # per-subagent model suggestions (new in v0.2)
+doctor suggest-routing        # per-subagent model suggestions
 ```
 
 Output is colorized in a TTY and plain when piped. JSON and Markdown are
