@@ -49,22 +49,30 @@ doctor suggest-routing        # per-subagent model suggestions (new in v0.2)
 Output is colorized in a TTY and plain when piped. JSON and Markdown are
 available with `--format json` / `--format md`.
 
-## What a finding looks like
+## Example output
+
+Real output from a `doctor check` run on the author's own 7-day window
+(actual numbers, not a mock):
 
 ```
+Doctor report  ·  54 sessions  ·  $20,027 total shadow spend
+
+  15 high · 25 med · 1 low
+  potential weekly savings: $2,889
+
 │ RUNAWAY_SESSION  [cost · high]
-│ session 63063a38  ~/clawbot
+│ session b87c4e13  ~/ZStack/zstack/workspace
 │
 │ A single session consumed > 25% of weekly spend.
 │
 │ Detected:
-│   session cost: $8,540
-│   share of weekly total: 43.1%  (threshold: 25%)
-│   turns: 10,348
+│   session cost: $6,247
+│   share of weekly total: 31.2%  (threshold: 25%)
+│   turns: 5052
 │
 │ Fix:
 │   Inspect the transcript:
-│     agent-ledger explain 63063a38
+│     agent-ledger explain b87c4e13
 │   Add a guardrail to your agent config:
 │     max_turns: 80
 │     max_cost_usd: 50
