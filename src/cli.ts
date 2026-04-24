@@ -57,7 +57,7 @@ export function main(argv: string[]): void {
       return cmdSuggestRouting(rest);
     case "--version":
     case "-v":
-      process.stdout.write("claude-agent-doctor v0.2.0\n");
+      process.stdout.write("claude-agent-doctor v0.3.0\n");
       return;
     default:
       process.stderr.write(`unknown command: ${cmd}\n\n`);

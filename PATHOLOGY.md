@@ -1,4 +1,4 @@
-# Pathology catalog (v0.1)
+# Pathology catalog (v0.3)
 
 > A field guide to recurring failure modes in Claude Code sessions. Each entry
 > names a pattern, gives a detection signature, explains the mechanism, and
@@ -26,10 +26,14 @@ propose a new pathology.
 ### Loops
 - [`BASH_STORM`](#bash_storm) — > 500 Bash calls in one session
 - [`SUBAGENT_SPRAWL`](#subagent_sprawl) — > 8 distinct subagents per session
+- [`LOOP_DEATH`](#loop_death) — same tool fired 8+ turns in a row (v0.3)
+- [`RETRY_THRASH`](#retry_thrash) — one file both heavily read and heavily edited (v0.3)
 
 ### Tools
 - [`EDIT_THRASH`](#edit_thrash) — same file edited > 10 times in one session
 - [`NO_TOOL_BURN`](#no_tool_burn) — > 40% of spend in turns with no tool_use
+- [`CONTEXT_BLOAT`](#context_bloat) — peak turn input > 150K tokens (v0.3)
+- [`TOOL_CALL_STORM`](#tool_call_storm) — single turn fires 12+ tool_use blocks (v0.3)
 
 ---
 
@@ -251,6 +255,115 @@ For tasks that allow it, lower verbosity with `effort: low`.
 
 ### Related
 - This pathology is the hardest to act on — sometimes long reasoning is exactly what you want. Treat the threshold as a prompt to review, not a verdict.
+
+---
+
+## `LOOP_DEATH`
+
+**Category:** loops · **Severity:** high · **Added:** v0.3
+
+### Summary
+The same tool was the primary action for 8 or more consecutive turns.
+
+### Mechanism
+Healthy agent work alternates tools as the model learns from each result: search → read → edit → test. When one tool stays primary across 8+ turns without diversifying, the agent is usually stuck in a tight loop — re-running a failing test, tweaking a grep that won't match, or re-listing a directory waiting for something to appear. No new information is entering the reasoning, but tokens keep leaving.
+
+### Detection
+```
+max_consecutive_turns_with_same_primary_tool >= 8
+```
+We look at the first `tool_use` block in each assistant turn as that turn's "primary tool" and measure the longest run where it stayed the same across consecutive turns.
+
+### Prescription
+Open the transcript:
+```bash
+agent-ledger explain <session-id>
+```
+Locate the loop window. Common culprits and fixes:
+- **Grep loop**: raise the result cap, or pre-compute the superset once.
+- **Test retry loop**: cache the failing test output before the next edit; don't re-run until you've changed something relevant.
+- **Bash probe loop**: replace with a purpose-built tool if the pattern repeats often enough.
+
+### Related
+- Often co-occurs with [`BASH_STORM`](#bash_storm).
+- Distinct from `RUNAWAY_SESSION`, which measures cost share; this measures structure.
+
+---
+
+## `RETRY_THRASH`
+
+**Category:** loops · **Severity:** medium · **Added:** v0.3
+
+### Summary
+A single file was both heavily read and heavily edited in the same session — strong signal of corrective cycling.
+
+### Mechanism
+When the agent both reads and edits the same file many times, it is almost always fighting feedback: edit → test fails → re-read to re-plan → edit again. This is different from `EDIT_THRASH` (which catches edit-only loops, e.g. whitespace fights): `RETRY_THRASH` specifically catches the read ↔ edit ping-pong that indicates the agent is missing the file's structure each time.
+
+### Detection
+```
+for any path:
+    editedFiles[path] >= 5  AND  readFiles[path] >= 5
+```
+
+### Prescription
+- Pin the test output before the edit cycle; the agent should not re-run the test each iteration.
+- If the file is too big for the agent to hold in context, either split the file or extract the relevant section into a working scratchpad.
+- Consider moving this file's edits to a subagent with a smaller context so the retry cost stays low.
+
+### Related
+- Paired with [`EDIT_THRASH`](#edit_thrash); use both: EDIT_THRASH catches edit-only loops, RETRY_THRASH catches read-and-edit loops.
+
+---
+
+## `CONTEXT_BLOAT`
+
+**Category:** tools · **Severity:** medium · **Added:** v0.3
+
+### Summary
+Peak turn input (fresh input + cache writes + cache reads) crossed 150,000 tokens.
+
+### Mechanism
+A turn's "total input" is everything the model sees: fresh user message + prior cache writes + cache reads. Even with prompt caching's 90% discount on reads, carrying around 150K+ tokens every turn is expensive and slow. High peak input typically means: stale file reads accumulated across many turns, a system prompt that grew instead of being trimmed, or long chat history that the agent never summarized. A fresh session with a CLAUDE.md note summarizing prior context is almost always cheaper than continuing a bloated one.
+
+### Detection
+```
+peakTotalInputTokens > 150_000
+```
+Reported alongside the session's average, so you can tell whether the peak was a spike or a plateau.
+
+### Prescription
+- When approaching 100K input on a recurring basis, start a fresh session and `/resume` with a short handoff note.
+- Audit what's in the system prompt; Claude Code auto-resumption sometimes accumulates dead weight.
+- For long interactive sessions (pair programming), use `prompt_cache_ttl: 1h` deliberately; for short tasks, stick with the 5m default.
+
+### Related
+- Overlaps with `CACHE_TTL_MISMATCH` when the big cache is 1h-tier.
+
+---
+
+## `TOOL_CALL_STORM`
+
+**Category:** tools · **Severity:** low · **Added:** v0.3
+
+### Summary
+A single assistant turn issued 12 or more `tool_use` blocks.
+
+### Mechanism
+Parallel tool calls are legitimate — Claude can batch independent work, and 3-6 in one turn is often a speedup, not a bug. But when a turn crosses 10-12 tool calls, the pattern usually shifts from "parallelism" to "hedging": the agent is searching multiple variants just in case, reading files in bulk before deciding which ones matter, or listing directories defensively. It's not catastrophic — just worth a look, which is why severity is `low`.
+
+### Detection
+```
+max(tool_use_blocks_in_a_single_turn) >= 12
+```
+
+### Prescription
+- Open the session and inspect the fanout turn. If the tools are truly independent (e.g. 12 Reads on known files), it's fine.
+- If it's mostly exploratory (many Greps with similar patterns), tighten the system prompt to request a plan before the search.
+- For batch file reads, consider replacing with a single Glob or a higher result cap on one call.
+
+### Related
+- When combined with `BASH_STORM`, suggests a "fan-out exploration" phase the orchestrator isn't controlling.
 
 ---
 

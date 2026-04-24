@@ -22,6 +22,15 @@ interface Usage {
   cache_creation?: { ephemeral_1h_input_tokens?: number; ephemeral_5m_input_tokens?: number };
 }
 
+interface ToolUseBlock {
+  type: string;
+  name?: string;
+  input?: {
+    file_path?: string;
+    subagent_type?: string;
+  };
+}
+
 interface Turn {
   parentUuid?: string;
   isSidechain?: boolean;
@@ -31,7 +40,7 @@ interface Turn {
     role?: string;
     model?: string;
     usage?: Usage;
-    content?: Array<{ type: string; name?: string; input?: { file_path?: string; subagent_type?: string } }>;
+    content?: ToolUseBlock[];
   };
 }
 
@@ -123,11 +132,21 @@ function parseSession(path: string, file: string, project: string): SessionStat 
     noToolTurns: 0,
     noToolCost: 0,
     editedFiles: {},
+    readFiles: {},
+    maxToolRun: 0,
+    maxToolRunName: "",
+    maxToolCallsPerTurn: 0,
+    peakTotalInputTokens: 0,
+    totalInputTokensSum: 0,
   };
 
   let firstTs = Number.POSITIVE_INFINITY;
   let lastTs = 0;
   const seenSubagents = new Set<string>();
+  // Track the most recent "primary tool" (first tool_use name in a turn)
+  // across turns to spot consecutive runs.
+  let lastPrimaryTool = "";
+  let currentRun = 0;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -179,16 +198,47 @@ function parseSession(path: string, file: string, project: string): SessionStat 
 
     const content = msg.content ?? [];
     const toolUses = content.filter((b) => b.type === "tool_use");
+
+    // CONTEXT_BLOAT signal — total input on this turn.
+    const totalInputThisTurn = inTok + cache5m + cache1h + cacheRead;
+    if (totalInputThisTurn > stat.peakTotalInputTokens) {
+      stat.peakTotalInputTokens = totalInputThisTurn;
+    }
+    stat.totalInputTokensSum += totalInputThisTurn;
+
+    // TOOL_CALL_STORM signal — tool_use count in this single turn.
+    if (toolUses.length > stat.maxToolCallsPerTurn) {
+      stat.maxToolCallsPerTurn = toolUses.length;
+    }
+
     if (toolUses.length === 0) {
       stat.noToolTurns++;
       stat.noToolCost += turnCost;
     }
+
+    // LOOP_DEATH signal — same "primary tool" across consecutive turns.
+    const primaryTool = toolUses[0]?.name ?? "";
+    if (primaryTool && primaryTool === lastPrimaryTool) {
+      currentRun++;
+    } else {
+      currentRun = primaryTool ? 1 : 0;
+    }
+    if (currentRun > stat.maxToolRun) {
+      stat.maxToolRun = currentRun;
+      stat.maxToolRunName = primaryTool;
+    }
+    lastPrimaryTool = primaryTool;
+
     for (const tu of toolUses) {
       const name = tu.name ?? "unknown";
       stat.toolCount[name] = (stat.toolCount[name] ?? 0) + 1;
       if (name === "Edit" || name === "Write") {
         const fp = tu.input?.file_path;
         if (fp) stat.editedFiles[fp] = (stat.editedFiles[fp] ?? 0) + 1;
+      }
+      if (name === "Read") {
+        const fp = tu.input?.file_path;
+        if (fp) stat.readFiles[fp] = (stat.readFiles[fp] ?? 0) + 1;
       }
       if (name === "Agent" || name === "Task") {
         const sub = tu.input?.subagent_type;

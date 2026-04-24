@@ -24,6 +24,12 @@ function stat(partial: Partial<SessionStat> = {}): SessionStat {
     noToolTurns: 0,
     noToolCost: 0,
     editedFiles: {},
+    readFiles: {},
+    maxToolRun: 0,
+    maxToolRunName: "",
+    maxToolCallsPerTurn: 0,
+    peakTotalInputTokens: 0,
+    totalInputTokensSum: 0,
     ...partial,
   };
 }
@@ -39,8 +45,8 @@ function bundle(sessions: SessionStat[]): SessionStatsBundle {
 // Registry -------------------------------------------------------------
 
 describe("registry", () => {
-  it("ships 8 pathologies in v0.1", () => {
-    expect(PATHOLOGIES.length).toBe(8);
+  it("ships 12 pathologies in v0.3", () => {
+    expect(PATHOLOGIES.length).toBe(12);
   });
 
   it("codes are upper_snake_case and unique", () => {

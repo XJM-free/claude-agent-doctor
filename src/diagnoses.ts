@@ -339,6 +339,159 @@ function shortPath(p: string): string {
   return p.length > 50 ? "…" + p.slice(-47) : p;
 }
 
+// 9. LOOP_DEATH ----------------------------------------------------------
+
+const LOOP_DEATH: Pathology = {
+  code: "LOOP_DEATH",
+  category: "loops",
+  severity: "high",
+  summary: "The same tool fired 8+ turns in a row — an agent stuck in a tight loop.",
+  mechanism:
+    "When one tool is the primary action across many consecutive turns without " +
+    "diversification, the agent is usually stuck: re-running a failing test, searching " +
+    "the same pattern with tweaks, or repeating a shell probe that keeps returning " +
+    "nothing. A healthy session alternates tools as the model learns from feedback.",
+  detect(bundle) {
+    const hits: DiagnosisHit[] = [];
+    for (const s of bundle.sessions) {
+      if (s.maxToolRun < 8) continue;
+      hits.push({
+        code: "LOOP_DEATH",
+        sessionId: s.id,
+        project: s.project,
+        evidence: [
+          { metric: "consecutive turns", value: `${s.maxToolRun}`, threshold: "< 8" },
+          { metric: "stuck on tool", value: s.maxToolRunName || "unknown" },
+          { metric: "session cost", value: fmtUSD(sumModelCost(s)) },
+        ],
+        prescription:
+          `Inspect the loop in the transcript:\n  agent-ledger explain ${s.id}\n` +
+          `If the loop was grep/search, consider bumping the result cap in one call; ` +
+          `if it was a failing test, cache the failure and let the agent plan before retrying.`,
+      });
+    }
+    return hits;
+  },
+  prescribe: (h) => h.prescription,
+};
+
+// 10. RETRY_THRASH -------------------------------------------------------
+
+const RETRY_THRASH: Pathology = {
+  code: "RETRY_THRASH",
+  category: "loops",
+  severity: "med",
+  summary: "Same file was both heavily read and heavily edited — corrective cycling suspected.",
+  mechanism:
+    "A file that gets read and edited many times each, in the same session, almost always " +
+    "means the agent is fighting feedback: edit → test fails → re-read → edit again. This " +
+    "is distinct from EDIT_THRASH, which only counts edits; here we require strong signals " +
+    "on both sides to avoid flagging legitimate large refactors.",
+  detect(bundle) {
+    const hits: DiagnosisHit[] = [];
+    for (const s of bundle.sessions) {
+      let worst: { path: string; edits: number; reads: number } | null = null;
+      for (const [path, edits] of Object.entries(s.editedFiles)) {
+        const reads = s.readFiles[path] ?? 0;
+        if (edits < 5 || reads < 5) continue;
+        if (!worst || (edits + reads) > (worst.edits + worst.reads)) {
+          worst = { path, edits, reads };
+        }
+      }
+      if (!worst) continue;
+      hits.push({
+        code: "RETRY_THRASH",
+        sessionId: s.id,
+        project: s.project,
+        evidence: [
+          { metric: "file", value: shortPath(worst.path) },
+          { metric: "edits", value: `${worst.edits}`, threshold: "≥ 5" },
+          { metric: "reads", value: `${worst.reads}`, threshold: "≥ 5" },
+          { metric: "session cost", value: fmtUSD(sumModelCost(s)) },
+        ],
+        prescription:
+          `Pin the test or the error message first, then make one consolidated edit. ` +
+          `If the file is so large the agent re-reads it each time, split the file or ` +
+          `extract the relevant section into a working scratchpad.`,
+      });
+    }
+    return hits;
+  },
+  prescribe: (h) => h.prescription,
+};
+
+// 11. CONTEXT_BLOAT ------------------------------------------------------
+
+const CONTEXT_BLOAT: Pathology = {
+  code: "CONTEXT_BLOAT",
+  category: "tools",
+  severity: "med",
+  summary: "Peak turn input crossed 150K tokens — context is bloating and every turn is getting pricier.",
+  mechanism:
+    "Each turn's input = fresh user message + cache reads + cache writes. When peak input " +
+    "crosses 150K tokens, the context window is filling with stale file reads, long history, " +
+    "or redundant system prompt. Even with 90% cache discount, a 200K context is paying for " +
+    "a lot of bytes the model won't use this turn.",
+  detect(bundle) {
+    const hits: DiagnosisHit[] = [];
+    for (const s of bundle.sessions) {
+      if (s.peakTotalInputTokens < 150_000) continue;
+      const avg = s.turns > 0 ? s.totalInputTokensSum / s.turns : 0;
+      hits.push({
+        code: "CONTEXT_BLOAT",
+        sessionId: s.id,
+        project: s.project,
+        evidence: [
+          { metric: "peak turn input", value: `${(s.peakTotalInputTokens / 1000).toFixed(0)}K`, threshold: "< 150K" },
+          { metric: "avg turn input", value: `${(avg / 1000).toFixed(0)}K` },
+          { metric: "turns", value: `${s.turns}` },
+        ],
+        prescription:
+          `Start a fresh session when context gets > 100K. If you need continuity, ` +
+          `summarize the key decisions into a short CLAUDE.md note and /resume. ` +
+          `For long interactive sessions, drop \`prompt_cache_ttl: 1h\` only where reuse justifies it.`,
+      });
+    }
+    return hits;
+  },
+  prescribe: (h) => h.prescription,
+};
+
+// 12. TOOL_CALL_STORM ----------------------------------------------------
+
+const TOOL_CALL_STORM: Pathology = {
+  code: "TOOL_CALL_STORM",
+  category: "tools",
+  severity: "low",
+  summary: "A single turn fired 12+ tool_use blocks — either parallelism shining or the agent panicking.",
+  mechanism:
+    "One assistant turn with many tool_use blocks is not inherently bad — Claude can batch " +
+    "truly independent work. But when the count goes double-digit it's worth checking: the " +
+    "batches that are safely parallel are usually 3-5 tools; beyond that, you're often " +
+    "seeing the model hedge with redundant searches or list-all-files-just-in-case behaviour.",
+  detect(bundle) {
+    const hits: DiagnosisHit[] = [];
+    for (const s of bundle.sessions) {
+      if (s.maxToolCallsPerTurn < 12) continue;
+      hits.push({
+        code: "TOOL_CALL_STORM",
+        sessionId: s.id,
+        project: s.project,
+        evidence: [
+          { metric: "peak tool_use / turn", value: `${s.maxToolCallsPerTurn}`, threshold: "< 12" },
+          { metric: "turns", value: `${s.turns}` },
+        ],
+        prescription:
+          `Open \`agent-ledger explain ${s.id}\` and inspect the biggest-fanout turn. ` +
+          `If the tools are independent reads on known files, it's fine. If it's mostly ` +
+          `exploratory grep, tighten the system prompt to ask Claude to plan before searching.`,
+      });
+    }
+    return hits;
+  },
+  prescribe: (h) => h.prescription,
+};
+
 // Registry ---------------------------------------------------------------
 
 export const PATHOLOGIES: Pathology[] = [
@@ -350,6 +503,10 @@ export const PATHOLOGIES: Pathology[] = [
   SUBAGENT_SPRAWL,
   EDIT_THRASH,
   NO_TOOL_BURN,
+  LOOP_DEATH,
+  RETRY_THRASH,
+  CONTEXT_BLOAT,
+  TOOL_CALL_STORM,
 ];
 
 export function findByCode(code: string): Pathology | undefined {

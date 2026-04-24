@@ -25,6 +25,12 @@ export interface SessionStat {
   noToolTurns: number;                 // turns with no tool_use block
   noToolCost: number;                  // cost of those turns
   editedFiles: Record<string, number>; // path -> Edit count (for EDIT_THRASH)
+  readFiles: Record<string, number>;   // path -> Read count (for RETRY_THRASH)
+  maxToolRun: number;                  // longest run of the same tool across consecutive turns (for LOOP_DEATH)
+  maxToolRunName: string;              // which tool made that run
+  maxToolCallsPerTurn: number;         // most tool_use blocks in a single turn (for TOOL_CALL_STORM)
+  peakTotalInputTokens: number;        // highest (input + cache_creation + cache_read) of any turn (for CONTEXT_BLOAT)
+  totalInputTokensSum: number;         // sum of per-turn total input, for averaging
 }
 
 export interface SessionStatsBundle {

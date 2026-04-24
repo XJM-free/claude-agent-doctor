@@ -5,8 +5,8 @@
 
 [![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-42_passing-success)](test/)
-![pathologies: 8](https://img.shields.io/badge/pathologies-8-orange)
+[![tests](https://img.shields.io/badge/tests-53_passing-success)](test/)
+![pathologies: 12](https://img.shields.io/badge/pathologies-12-orange)
 
 ---
 
@@ -78,7 +78,7 @@ with the rule, skip it — `doctor` doesn't change anything on your machine.
 
 ## The catalog
 
-Eight rules ship in v0.1, in three categories. Full mechanisms and case
+Twelve rules ship in v0.3, in three categories. Full mechanisms and case
 studies in [PATHOLOGY.md](PATHOLOGY.md).
 
 | Code | Category | Severity | Summary |
@@ -89,8 +89,12 @@ studies in [PATHOLOGY.md](PATHOLOGY.md).
 | `CACHE_TTL_MISMATCH`| cost  | med  | Short session, heavy 1h cache writes |
 | `BASH_STORM`        | loops | high | > 500 Bash calls in one session |
 | `SUBAGENT_SPRAWL`   | loops | med  | > 8 distinct subagents per session |
+| `LOOP_DEATH`        | loops | high | Same tool fired 8+ consecutive turns (**v0.3**) |
+| `RETRY_THRASH`      | loops | med  | One file both heavily read and heavily edited (**v0.3**) |
 | `EDIT_THRASH`       | tools | med  | Same file edited > 10 times in one session |
 | `NO_TOOL_BURN`      | tools | low  | > 40% of spend in no-tool turns |
+| `CONTEXT_BLOAT`     | tools | med  | Peak turn input > 150K tokens (**v0.3**) |
+| `TOOL_CALL_STORM`   | tools | low  | Single turn fires 12+ tool_use blocks (**v0.3**) |
 
 ## `suggest-routing` — config advisor (v0.2)
 
@@ -180,10 +184,10 @@ corpus. Pricing matches Anthropic published rates as of 2026-04; values may
 drift ±5-10% in edge cases (retries, server-tool calibration). Calibration
 PRs welcome.
 
-v0.2 ships the `suggest-routing` advisor (see above) and grows to 42 tests.
+v0.3 ships 4 new pathologies (`LOOP_DEATH`, `RETRY_THRASH`, `CONTEXT_BLOAT`,
+`TOOL_CALL_STORM`) and grows to 53 tests.
 
 Roadmap:
-- `v0.3` — 4 more pathologies in the loops category: `LOOP_DEATH`, `RETRY_THRASH`, `CONTEXT_BLOAT`, `TOOL_CALL_STORM`
 - `v0.4` — per-subagent invocation + cost tracking (feeds better routing suggestions)
 - `v0.5` — per-project profiles, custom thresholds via `.doctor.yml`
 - `v1.0` — cross-agent support (Codex, Cursor logs)
