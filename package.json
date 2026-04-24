@@ -1,6 +1,6 @@
 {
   "name": "claude-agent-doctor",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lint your Claude Code sessions. Zero tokens, zero network. Catches cost leaks and agent loops before you do.",
   "type": "module",
   "bin": {

@@ -12,26 +12,34 @@ import {
   renderMarkdown,
   renderSummary,
 } from "./lib/render.js";
+import { findAllAgentFiles } from "./advisors/agent-files.js";
+import { generatePatch, suggest } from "./advisors/routing.js";
+import { renderJSON as renderPlanJSON, renderPlan } from "./lib/routing-render.js";
 
 const HELP = `doctor — lint your Claude Code sessions (zero tokens, zero network)
 
 Usage:
-  doctor check [session-id]  [--category cost|loops|tools] [--format md|json] [--days N]
-  doctor explain [CODE]      # no arg: full catalog; with arg: one pathology
+  doctor check [session-id]       [--category cost|loops|tools] [--format md|json] [--days N]
+  doctor explain [CODE]           # no arg: full catalog; with arg: one pathology
+  doctor suggest-routing          # per-subagent model suggestions based on your config
+                                  [--format json] [--export-patch]
 
 Options:
-  --days N        Window size in days (default: 7)
-  --category C    Only run diagnoses in this category
-  --format F      Output format: tty (default) | md | json
-  --no-color      Disable ANSI color
+  --days N         Window size in days (default: 7)
+  --category C     Only run diagnoses in this category
+  --format F       Output format: tty (default) | md | json
+  --no-color       Disable ANSI color
+  --export-patch   (suggest-routing) emit a unified diff instead of the plan
 
 Examples:
-  doctor check                 # scan the last 7 days
-  doctor check --days 30       # scan the last month
-  doctor check abc12345        # deep-scan one session
+  doctor check                     # scan the last 7 days
+  doctor check --days 30           # scan the last month
+  doctor check abc12345            # deep-scan one session
   doctor check --format md > report.md
-  doctor explain               # browse the catalog (${PATHOLOGIES.length} pathologies)
-  doctor explain OPUS_OVERSPEND
+  doctor explain                   # browse the catalog (${PATHOLOGIES.length} pathologies)
+  doctor explain BASH_STORM
+  doctor suggest-routing           # suggest model downgrades by agent role
+  doctor suggest-routing --export-patch > routing.patch
 `;
 
 export function main(argv: string[]): void {
@@ -45,15 +53,48 @@ export function main(argv: string[]): void {
       return cmdCheck(rest);
     case "explain":
       return cmdExplain(rest);
+    case "suggest-routing":
+      return cmdSuggestRouting(rest);
     case "--version":
     case "-v":
-      process.stdout.write("claude-agent-doctor v0.1.0\n");
+      process.stdout.write("claude-agent-doctor v0.2.0\n");
       return;
     default:
       process.stderr.write(`unknown command: ${cmd}\n\n`);
       process.stderr.write(HELP);
       process.exitCode = 2;
   }
+}
+
+function cmdSuggestRouting(args: string[]): void {
+  const format = args.includes("--format") ? args[args.indexOf("--format") + 1] : undefined;
+  const exportPatch = args.includes("--export-patch");
+  if (args.includes("--no-color")) process.env.NO_COLOR = "1";
+
+  const agents = findAllAgentFiles();
+  if (agents.length === 0) {
+    process.stderr.write(
+      "no agent files found. doctor looks under:\n" +
+        "  <cwd>/.claude/agents/**\n" +
+        "  ~/.claude/agents/**\n",
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  const bundle = readBundle({ sinceMs: sinceDays(30) });
+  const plan = suggest(bundle, agents);
+
+  if (exportPatch) {
+    process.stdout.write(generatePatch(plan));
+    return;
+  }
+  if (format === "json") {
+    process.stdout.write(renderPlanJSON(plan));
+    process.stdout.write("\n");
+    return;
+  }
+  process.stdout.write(renderPlan(plan));
 }
 
 function cmdCheck(args: string[]): void {

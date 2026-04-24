@@ -5,7 +5,7 @@
 
 [![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-25_passing-success)](test/)
+[![tests](https://img.shields.io/badge/tests-42_passing-success)](test/)
 ![pathologies: 8](https://img.shields.io/badge/pathologies-8-orange)
 
 ---
@@ -38,11 +38,12 @@ npm install -g claude-agent-doctor
 ## Quick start
 
 ```bash
-doctor check                # scan the last 7 days
-doctor check --days 30      # scan the last month
-doctor check <session-id>   # deep-scan one session
-doctor explain              # browse the catalog (8 pathologies)
-doctor explain BASH_STORM   # one pathology, in detail
+doctor check                  # scan the last 7 days
+doctor check --days 30        # scan the last month
+doctor check <session-id>     # deep-scan one session
+doctor explain                # browse the catalog (8 pathologies)
+doctor explain BASH_STORM     # one pathology, in detail
+doctor suggest-routing        # per-subagent model suggestions (new in v0.2)
 ```
 
 Output is colorized in a TTY and plain when piped. JSON and Markdown are
@@ -90,6 +91,44 @@ studies in [PATHOLOGY.md](PATHOLOGY.md).
 | `SUBAGENT_SPRAWL`   | loops | med  | > 8 distinct subagents per session |
 | `EDIT_THRASH`       | tools | med  | Same file edited > 10 times in one session |
 | `NO_TOOL_BURN`      | tools | low  | > 40% of spend in no-tool turns |
+
+## `suggest-routing` — config advisor (v0.2)
+
+`doctor suggest-routing` reads every subagent definition under
+`~/.claude/agents/` (and `<project>/.claude/agents/`), infers intended role
+from the frontmatter, and proposes per-agent model changes.
+
+Two things make this different from a runtime router like
+[musistudio/claude-code-router](https://github.com/musistudio/claude-code-router):
+
+1. **No proxy.** We don't sit in front of the API. You apply suggestions
+   yourself; nothing in your request path changes.
+2. **Guarded by default.** Orchestrators, payment / subscription agents,
+   safety / compliance auditors, and reality checkers are never auto-
+   downgraded. The blast radius of a mis-route on those is too large.
+
+```
+Routing suggestions
+
+  1 change suggested:
+
+  dingding                  sonnet → haiku  high conf  [user]
+    ~/.claude/agents/dingding.md
+    read-only work signals (search, fetch, log) — haiku at 1/10 the cost
+
+  15 agents left unchanged (guarded roles or low-signal descriptions).
+
+Safer first experiment
+  export CLAUDE_CODE_SUBAGENT_MODEL=haiku
+  (Anthropic-official env var — instantly reversible by unsetting.)
+```
+
+Export as a unified diff and apply yourself:
+
+```bash
+doctor suggest-routing --export-patch > routing.patch
+patch -p0 < routing.patch
+```
 
 ## How it relates to `/cost` and `agent-ledger`
 
@@ -141,10 +180,12 @@ corpus. Pricing matches Anthropic published rates as of 2026-04; values may
 drift ±5-10% in edge cases (retries, server-tool calibration). Calibration
 PRs welcome.
 
-Roadmap for v0.2-0.4:
-- `v0.2` — 4 more pathologies (loops category): `LOOP_DEATH`, `RETRY_THRASH`, `CONTEXT_BLOAT`, `TOOL_CALL_STORM`
-- `v0.3` — 4 more in the tools category
-- `v0.4` — per-project profiles, custom thresholds via `.doctor.yml`
+v0.2 ships the `suggest-routing` advisor (see above) and grows to 42 tests.
+
+Roadmap:
+- `v0.3` — 4 more pathologies in the loops category: `LOOP_DEATH`, `RETRY_THRASH`, `CONTEXT_BLOAT`, `TOOL_CALL_STORM`
+- `v0.4` — per-subagent invocation + cost tracking (feeds better routing suggestions)
+- `v0.5` — per-project profiles, custom thresholds via `.doctor.yml`
 - `v1.0` — cross-agent support (Codex, Cursor logs)
 
 ## Author
