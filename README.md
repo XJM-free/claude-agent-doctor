@@ -9,7 +9,7 @@
 
 [![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-53_passing-success)](test/)
+[![tests](https://img.shields.io/badge/tests-60_passing-success)](test/)
 ![pathologies: 12](https://img.shields.io/badge/pathologies-12-orange)
 
 ---
@@ -55,10 +55,14 @@ doctor suggest-routing        # per-subagent model suggestions
 Output is colorized in a TTY and plain when piped. JSON and Markdown are
 available with `--format json` / `--format md`.
 
+`--days` applies an inclusive cutoff to each assistant turn, not to the session
+as a whole. Turns without a valid timestamp are omitted from windowed reports.
+
 ## Example output
 
-Real output from a `doctor check` run on the author's own 7-day window
-(actual numbers, not a mock):
+Output from an earlier local run, retained to illustrate the report format.
+Its totals predate turn-level window filtering and are not a validated 7-day
+benchmark:
 
 ```
 Doctor report  ·  54 sessions  ·  $20,027 total shadow spend

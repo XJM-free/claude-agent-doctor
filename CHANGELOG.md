@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed**: `--days` now excludes out-of-window assistant turns from resumed
+  sessions instead of counting the entire JSONL file, preventing inflated
+  costs, tool metrics, and pathology findings.
+- Windowed scans omit assistant turns with missing or invalid timestamps rather
+  than assigning unknown activity to the selected period.
+- Empty windows no longer emit a `HAIKU_NEGLECT` finding backed by a phantom
+  session.
+
 ## v0.3.0 — 2026-04-24
 
 Four new pathologies in the loops and tools categories, plus expanded data
@@ -12,8 +22,9 @@ extraction from session transcripts.
 - **Added**: `SessionStat` now tracks `readFiles`, `maxToolRun`, `maxToolCallsPerTurn`, `peakTotalInputTokens`
 - **Added**: 11 new tests covering the four new pathologies
 - **Added**: `docs/drafts/v0.4-pathologies.md` with the next four pathology drafts
-- Live-validated on the author's 14-day window: 17 LOOP_DEATH, 22 CONTEXT_BLOAT,
-  13 EDIT_THRASH, 11 RETRY_THRASH hits — real patterns, not synthetic.
+- A historical pre-fix local run reported 17 LOOP_DEATH, 22 CONTEXT_BLOAT,
+  13 EDIT_THRASH, and 11 RETRY_THRASH hits. Those counts predate turn-level
+  window filtering and are not calibrated window evidence.
 
 ## v0.2.0 — 2026-04-24
 
