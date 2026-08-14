@@ -153,6 +153,11 @@ describe("SUBAGENT_SPRAWL", () => {
 });
 
 describe("HAIKU_NEGLECT", () => {
+  it("does not fire when the selected window has no sessions", () => {
+    const hits = detectAll(bundle([]));
+    expect(hits.some((h) => h.code === "HAIKU_NEGLECT")).toBe(false);
+  });
+
   it("fires when no haiku usage at all", () => {
     const s = stat({ modelCost: { "claude-opus-4-7": 50 } });
     expect(detectAll(bundle([s])).some((h) => h.code === "HAIKU_NEGLECT")).toBe(true);

@@ -7,6 +7,8 @@
   costs, tool metrics, and pathology findings.
 - Windowed scans omit assistant turns with missing or invalid timestamps rather
   than assigning unknown activity to the selected period.
+- Empty windows no longer emit a `HAIKU_NEGLECT` finding backed by a phantom
+  session.
 
 ## v0.3.0 — 2026-04-24
 

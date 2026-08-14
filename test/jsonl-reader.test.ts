@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { detectAll } from "../src/diagnoses.js";
 import { readBundle } from "../src/sensors/jsonl-reader.js";
 
 const SINCE = Date.parse("2026-08-10T00:00:00.000Z");
@@ -98,6 +99,7 @@ describe("readBundle turn windows", () => {
 
     expect(bundle.sessions).toEqual([]);
     expect(bundle.totalCost).toBe(0);
+    expect(detectAll(bundle)).toEqual([]);
   });
 
   it("uses turn timestamps even when a restored file has an older mtime", () => {

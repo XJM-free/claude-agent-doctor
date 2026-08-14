@@ -86,12 +86,13 @@ const HAIKU_NEGLECT: Pathology = {
     "Opus premium. The fix is almost always a subagent-level model override.",
   detect(bundle) {
     const hits: DiagnosisHit[] = [];
+    if (bundle.sessions.length === 0) return hits;
     const perModelSessions: Record<string, number> = {};
     for (const s of bundle.sessions) {
       for (const m of Object.keys(s.modelCost)) perModelSessions[m] = (perModelSessions[m] ?? 0) + 1;
     }
     const haiku = Object.entries(perModelSessions).filter(([m]) => m.includes("haiku")).reduce((a, [, c]) => a + c, 0);
-    const total = bundle.sessions.length || 1;
+    const total = bundle.sessions.length;
     const share = haiku / total;
     if (share >= 0.05) return hits;
     hits.push({
