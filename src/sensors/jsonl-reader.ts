@@ -5,7 +5,7 @@
 // Each line is one turn. Assistant turns include a `message` object with
 // `model`, `usage` (token counts), and `content` (tool_use / text blocks).
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -45,12 +45,16 @@ interface Turn {
 }
 
 export interface ReadOptions {
-  sinceMs?: number;     // only include sessions whose mtime is newer
+  /** Include assistant turns at or after this timestamp. */
+  sinceMs?: number;
   projectFilter?: RegExp;
+  /** Override the default Claude projects directory. */
+  projectsRoot?: string;
 }
 
 export function readBundle(opts: ReadOptions = {}): SessionStatsBundle {
-  const projects = safeReadDir(PROJECTS_ROOT);
+  const projectsRoot = opts.projectsRoot ?? PROJECTS_ROOT;
+  const projects = safeReadDir(projectsRoot);
   const sessions: SessionStat[] = [];
 
   let minStart = Number.POSITIVE_INFINITY;
@@ -59,20 +63,12 @@ export function readBundle(opts: ReadOptions = {}): SessionStatsBundle {
 
   for (const proj of projects) {
     if (opts.projectFilter && !opts.projectFilter.test(proj)) continue;
-    const projDir = join(PROJECTS_ROOT, proj);
+    const projDir = join(projectsRoot, proj);
     const files = safeReadDir(projDir).filter((f) => f.endsWith(".jsonl"));
 
     for (const file of files) {
       const full = join(projDir, file);
-      let mtime: number;
-      try {
-        mtime = statSync(full).mtimeMs;
-      } catch {
-        continue;
-      }
-      if (opts.sinceMs && mtime < opts.sinceMs) continue;
-
-      const stat = parseSession(full, file, proj);
+      const stat = parseSession(full, file, proj, opts.sinceMs);
       if (!stat || stat.turns === 0) continue;
       sessions.push(stat);
       total += sumModelCost(stat);
@@ -103,7 +99,12 @@ function safeReadDir(p: string): string[] {
   }
 }
 
-function parseSession(path: string, file: string, project: string): SessionStat | null {
+function parseSession(
+  path: string,
+  file: string,
+  project: string,
+  sinceMs?: number,
+): SessionStat | null {
   let text: string;
   try {
     text = readFileSync(path, "utf8");
@@ -159,13 +160,19 @@ function parseSession(path: string, file: string, project: string): SessionStat 
     const msg = turn.message;
     if (!msg || msg.role !== "assistant") continue;
 
+    const timestampMs =
+      typeof turn.timestamp === "string" ? Date.parse(turn.timestamp) : Number.NaN;
+    if (
+      sinceMs !== undefined &&
+      (!Number.isFinite(timestampMs) || timestampMs < sinceMs)
+    ) {
+      continue;
+    }
+
     stat.turns++;
-    if (turn.timestamp) {
-      const t = Date.parse(turn.timestamp);
-      if (isFinite(t)) {
-        firstTs = Math.min(firstTs, t);
-        lastTs = Math.max(lastTs, t);
-      }
+    if (Number.isFinite(timestampMs)) {
+      firstTs = Math.min(firstTs, timestampMs);
+      lastTs = Math.max(lastTs, timestampMs);
     }
 
     const u = msg.usage ?? {};
