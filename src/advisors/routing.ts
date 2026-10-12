@@ -105,10 +105,9 @@ export function suggest(bundle: SessionStatsBundle, agents: AgentFile[]): Routin
   let envVarAdvice: string | undefined;
   if (!anyHaikuConfigured && hasOpusConfigured) {
     envVarAdvice =
-      "No agent currently targets Haiku. For a zero-risk experiment, try:\n" +
-      "  export CLAUDE_CODE_SUBAGENT_MODEL=haiku\n" +
-      "This forces all subagent invocations to Haiku 4.5 for the current session.\n" +
-      "Unset the variable to instantly revert.";
+      "No agent currently targets Haiku. Review the agent-specific suggestions above. " +
+      "Keep orchestrator, payment, and safety roles at their current tier; " +
+      "a global model override would bypass those guards.";
   }
 
   return { suggestions, envVarAdvice };
@@ -160,7 +159,7 @@ function classify(a: AgentFile): Classification {
   if (haikuHits.length >= 2) {
     return {
       tier: "haiku",
-      reason: `read-only work signals (${haikuHits.slice(0, 3).join(", ")}) — haiku handles this at 1/10 the cost`,
+      reason: `read-only work signals (${haikuHits.slice(0, 3).join(", ")}) — candidate for a cheaper model; validate its output quality`,
       confidence: haikuHits.length >= 3 ? "high" : "med",
     };
   }
@@ -173,15 +172,14 @@ function classify(a: AgentFile): Classification {
 }
 
 function countSubagentInvocations(bundle: SessionStatsBundle): Map<string, number> {
-  // The JSONL reader doesn't currently record per-subagent-type counts (only
-  // distinct count). This is a best-effort pass over the already-aggregated
-  // tool counts: the subagent_type value lives in the tool_use input, which
-  // the reader throws away. We return an empty map for now; callers will
-  // show suggestions without invocation data, which is still useful.
-  //
-  // Wiring the raw subagent_type into SessionStat is a v0.3 improvement.
-  void bundle;
-  return new Map();
+  const counts = new Map<string, number>();
+  for (const session of bundle.sessions) {
+    for (const [name, count] of Object.entries(session.subagentInvocations ?? {})) {
+      if (!Number.isSafeInteger(count) || count < 0) continue;
+      counts.set(name, (counts.get(name) ?? 0) + count);
+    }
+  }
+  return counts;
 }
 
 export function generatePatch(plan: RoutingPlan): string {

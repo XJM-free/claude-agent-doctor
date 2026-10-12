@@ -67,6 +67,32 @@ function writeSession(
 }
 
 describe("readBundle turn windows", () => {
+  it("counts Agent and Task invocations inside the selected window", () => {
+    const projectsRoot = makeProjectsRoot();
+    writeSession(projectsRoot, "agent-counts", [
+      assistantTurn(new Date(SINCE - 1).toISOString(), 1, [tool("Agent", { subagent_type: "Log Reader" })]),
+      assistantTurn(new Date(SINCE).toISOString(), 1, [
+        tool("Agent", { subagent_type: "Log Reader" }),
+        tool("Task", { subagent_type: "Log Reader" }),
+        tool("Agent", { subagent_type: "Reviewer" }),
+      ]),
+    ]);
+    const session = readBundle({ projectsRoot, sinceMs: SINCE }).sessions[0]!;
+    expect(session.subagentInvocations).toEqual({ "Log Reader": 2, Reviewer: 1 });
+    expect(session.subagentCount).toBe(2);
+  });
+
+  it("ignores non-object JSON records and tolerates malformed content blocks", () => {
+    const projectsRoot = makeProjectsRoot();
+    const projectDir = join(projectsRoot, "project-demo");
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(join(projectDir, "malformed.jsonl"), [
+      "null", "[]", "7", '{"message": null}',
+      JSON.stringify(assistantTurn(new Date(SINCE).toISOString(), 1, [])),
+    ].join("\n"));
+    expect(readBundle({ projectsRoot, sinceMs: SINCE }).sessions[0]?.turns).toBe(1);
+  });
+
   it("uses an inclusive assistant-turn cutoff inside a resumed session", () => {
     const projectsRoot = makeProjectsRoot();
     writeSession(projectsRoot, "mixed-session", [

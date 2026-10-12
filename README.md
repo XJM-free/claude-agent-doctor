@@ -57,6 +57,12 @@ available with `--format json` / `--format md`.
 
 `--days` applies an inclusive cutoff to each assistant turn, not to the session
 as a whole. Turns without a valid timestamp are omitted from windowed reports.
+Invalid options, categories, formats and day counts return exit code `2` before
+scanning logs. Day counts must be whole numbers from `1` to `36500`.
+
+Routing suggestions use observed Agent/Task invocation counts in the selected
+window. Heavily used agents receive more conservative suggestions. Changes are
+proposed per agent, so protected roles retain their own model settings.
 
 ## Example output
 
@@ -212,7 +218,7 @@ Roadmap:
 
 ## Author
 
-[@XJM-free](https://jiexiang.dev). Also maintains
+[@XJM-free](https://github.com/XJM-free). Also maintains
 [agent-ledger](https://github.com/XJM-free/claude-agent-ledger) (cost
 attribution for Claude Code) and
 [apple-presubmit-audit](https://github.com/XJM-free/apple-presubmit-audit)

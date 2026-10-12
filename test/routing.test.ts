@@ -9,7 +9,7 @@ import {
   normalizeModelAlias,
 } from "../src/advisors/agent-files.js";
 import { generatePatch, rewriteModelField, suggest } from "../src/advisors/routing.js";
-import type { SessionStatsBundle } from "../src/types.js";
+import type { SessionStat, SessionStatsBundle } from "../src/types.js";
 
 beforeAll(() => {
   process.env.NO_COLOR = "1";
@@ -113,10 +113,34 @@ describe("classify (via suggest)", () => {
     expect(plan.suggestions[0]!.suggestedTier).toBe("keep");
   });
 
-  it("emits env-var advice when no haiku is configured", () => {
+  it("keeps routing advice agent-specific instead of bypassing role guards", () => {
     const a = agentFile({ model: "opus", description: "implement api" });
     const plan = suggest(bundle(), [a]);
-    expect(plan.envVarAdvice).toContain("CLAUDE_CODE_SUBAGENT_MODEL=haiku");
+    expect(plan.envVarAdvice).toContain("agent-specific");
+    expect(plan.envVarAdvice).not.toContain("CLAUDE_CODE_SUBAGENT_MODEL=haiku");
+  });
+
+  it("uses measured invocation counts to moderate heavily used agent downgrades", () => {
+    const input = bundle();
+    const base: SessionStat = {
+      id: "fixture", fullId: "fixture-session", project: "synthetic",
+      startedAt: new Date(0), endedAt: new Date(0), turns: 0,
+      modelCost: {}, toolCount: {}, subagentCount: 0,
+      inputTokens: 0, outputTokens: 0, cache1hWriteTokens: 0,
+      cache5mWriteTokens: 0, cacheReadTokens: 0, noToolTurns: 0,
+      noToolCost: 0, editedFiles: {}, readFiles: {}, maxToolRun: 0,
+      maxToolRunName: "", maxToolCallsPerTurn: 0, peakTotalInputTokens: 0,
+      totalInputTokensSum: 0,
+    };
+    input.sessions = [
+      { ...base, subagentInvocations: { "Log Reader": 21 } },
+      { ...base, subagentInvocations: { "Log Reader": 11 } },
+    ];
+    const plan = suggest(input, [agentFile({
+      name: "Log Reader", model: "opus", description: "read logs, grep errors, fetch alerts",
+    })]);
+    expect(plan.suggestions[0]?.invocations).toBe(32);
+    expect(plan.suggestions[0]?.suggestedTier).toBe("sonnet");
   });
 
   it("skips env-var advice when haiku already configured", () => {
