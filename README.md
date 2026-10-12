@@ -9,7 +9,7 @@
 
 [![npm](https://img.shields.io/npm/v/claude-agent-doctor.svg)](https://www.npmjs.com/package/claude-agent-doctor)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![tests](https://img.shields.io/badge/tests-60_passing-success)](test/)
+[![CI](https://github.com/XJM-free/claude-agent-doctor/actions/workflows/ci.yml/badge.svg)](https://github.com/XJM-free/claude-agent-doctor/actions/workflows/ci.yml)
 ![pathologies: 12](https://img.shields.io/badge/pathologies-12-orange)
 
 ---
