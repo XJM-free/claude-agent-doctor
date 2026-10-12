@@ -21,9 +21,9 @@
     "link": "bun link"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@types/bun": "1.4.2",
+    "@types/node": "20.19.43",
+    "typescript": "5.9.3"
   },
   "keywords": [
     "claude-code",
