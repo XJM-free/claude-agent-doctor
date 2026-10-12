@@ -218,7 +218,7 @@ Roadmap:
 
 ## Author
 
-[@XJM-free](https://github.com/XJM-free). Also maintains
+[Quiet Orbit](https://github.com/XJM-free). Also maintains
 [agent-ledger](https://github.com/XJM-free/claude-agent-ledger) (cost
 attribution for Claude Code) and
 [apple-presubmit-audit](https://github.com/XJM-free/apple-presubmit-audit)
