@@ -44,10 +44,11 @@ Examples:
 
 export function main(argv: string[]): void {
   const [cmd, ...rest] = argv;
-  if (!cmd || cmd === "-h" || cmd === "--help") {
+  if (!cmd || cmd === "-h" || cmd === "--help" || rest.includes("--help") || rest.includes("-h")) {
     process.stdout.write(HELP);
     return;
   }
+  try {
   switch (cmd) {
     case "check":
       return cmdCheck(rest);
@@ -60,16 +61,19 @@ export function main(argv: string[]): void {
       process.stdout.write("claude-agent-doctor v0.3.0\n");
       return;
     default:
-      process.stderr.write(`unknown command: ${cmd}\n\n`);
-      process.stderr.write(HELP);
-      process.exitCode = 2;
+      throw new UsageError("unknown command");
+  }
+  } catch (error) {
+    if (!(error instanceof UsageError)) throw error;
+    process.stderr.write(`doctor: ${error.message}\nRun doctor --help for usage.\n`);
+    process.exitCode = 2;
   }
 }
 
 function cmdSuggestRouting(args: string[]): void {
-  const format = args.includes("--format") ? args[args.indexOf("--format") + 1] : undefined;
-  const exportPatch = args.includes("--export-patch");
-  if (args.includes("--no-color")) process.env.NO_COLOR = "1";
+  const opts = parseOptions(args, "suggest-routing");
+  const { format, exportPatch } = opts;
+  if (opts.noColor) process.env.NO_COLOR = "1";
 
   const agents = findAllAgentFiles();
   if (agents.length === 0) {
@@ -98,7 +102,8 @@ function cmdSuggestRouting(args: string[]): void {
 }
 
 function cmdCheck(args: string[]): void {
-  const opts = parseCheckArgs(args);
+  const opts = parseOptions(args, "check");
+  if (opts.noColor) process.env.NO_COLOR = "1";
 
   const sinceMs = opts.days ? sinceDays(opts.days) : sinceDays(7);
   const bundle = readBundle({ sinceMs });
@@ -137,14 +142,16 @@ function cmdCheck(args: string[]): void {
 }
 
 function cmdExplain(args: string[]): void {
-  const code = args.find((a) => !a.startsWith("-"));
+  const opts = parseOptions(args, "explain");
+  if (opts.noColor) process.env.NO_COLOR = "1";
+  const code = opts.sessionId;
   if (!code) {
     process.stdout.write(renderCatalog());
     return;
   }
   const p = findByCode(code);
   if (!p) {
-    process.stderr.write(`unknown pathology: ${code}\n`);
+    process.stderr.write("unknown pathology code\n");
     process.stderr.write(`run \`doctor explain\` to list all codes.\n`);
     process.exitCode = 1;
     return;
@@ -157,30 +164,58 @@ interface CheckOpts {
   category?: string;
   format?: "md" | "json" | "tty";
   sessionId?: string;
+  exportPatch?: boolean;
+  noColor?: boolean;
 }
 
-function parseCheckArgs(args: string[]): CheckOpts {
+class UsageError extends Error {}
+
+function parseOptions(args: string[], command: "check" | "explain" | "suggest-routing"): CheckOpts {
   const out: CheckOpts = {};
+  const value = (index: number): string => {
+    const next = args[index + 1];
+    if (!next || next.startsWith("--")) throw new UsageError("option requires a value");
+    return next;
+  };
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     switch (a) {
       case "--days":
-        out.days = parseInt(args[++i]!, 10);
+        if (command !== "check") throw new UsageError("--days is only supported by check");
+        const days = value(i++);
+        if (!/^[0-9]+$/.test(days) || !Number.isSafeInteger(Number(days)) || Number(days) < 1 || Number(days) > 36500) {
+          throw new UsageError("--days requires an integer from 1 to 36500");
+        }
+        out.days = Number(days);
         break;
       case "--category":
-        out.category = args[++i];
+        if (command !== "check") throw new UsageError("--category is only supported by check");
+        const category = value(i++);
+        if (!["cost", "loops", "tools"].includes(category)) throw new UsageError("unsupported category");
+        out.category = category;
         break;
       case "--format":
-        out.format = args[++i] as CheckOpts["format"];
+        if (command === "explain") throw new UsageError("explain does not accept --format");
+        const format = value(i++);
+        const allowed = command === "check" ? ["tty", "md", "json"] : ["tty", "json"];
+        if (!allowed.includes(format)) throw new UsageError("unsupported output format");
+        out.format = format as CheckOpts["format"];
         break;
       case "--no-color":
-        process.env.NO_COLOR = "1";
+        out.noColor = true;
+        break;
+      case "--export-patch":
+        if (command !== "suggest-routing") throw new UsageError("--export-patch is only supported by suggest-routing");
+        out.exportPatch = true;
         break;
       default:
-        if (!a.startsWith("-")) {
-          out.sessionId = a;
-        }
+        if (a.startsWith("-") || command === "suggest-routing") throw new UsageError("unsupported argument");
+        if (out.sessionId !== undefined) throw new UsageError("expected at most one positional argument");
+        const pattern = command === "check" ? /^[A-Za-z0-9-]+$/ : /^[A-Za-z0-9_]+$/;
+        if (!pattern.test(a)) throw new UsageError("invalid identifier");
+        out.sessionId = a;
     }
   }
+  if (out.exportPatch && out.format) throw new UsageError("--export-patch and --format are mutually exclusive");
   return out;
 }

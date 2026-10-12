@@ -17,6 +17,7 @@ export interface SessionStat {
   modelCost: Record<string, number>;   // model -> dollars
   toolCount: Record<string, number>;   // tool name -> invocations
   subagentCount: number;               // distinct Agent spawns
+  subagentInvocations?: Record<string, number>; // selected-window Agent/Task calls by type
   inputTokens: number;
   outputTokens: number;
   cache1hWriteTokens: number;

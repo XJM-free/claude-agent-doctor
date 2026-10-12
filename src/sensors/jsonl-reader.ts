@@ -125,6 +125,7 @@ function parseSession(
     modelCost: {},
     toolCount: {},
     subagentCount: 0,
+    subagentInvocations: {},
     inputTokens: 0,
     outputTokens: 0,
     cache1hWriteTokens: 0,
@@ -153,12 +154,14 @@ function parseSession(
     if (!line.trim()) continue;
     let turn: Turn;
     try {
-      turn = JSON.parse(line);
+      const parsed = JSON.parse(line);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) continue;
+      turn = parsed;
     } catch {
       continue;
     }
     const msg = turn.message;
-    if (!msg || msg.role !== "assistant") continue;
+    if (!msg || typeof msg !== "object" || Array.isArray(msg) || msg.role !== "assistant") continue;
 
     const timestampMs =
       typeof turn.timestamp === "string" ? Date.parse(turn.timestamp) : Number.NaN;
@@ -203,8 +206,8 @@ function parseSession(
 
     stat.modelCost[model] = (stat.modelCost[model] ?? 0) + turnCost;
 
-    const content = msg.content ?? [];
-    const toolUses = content.filter((b) => b.type === "tool_use");
+    const content = Array.isArray(msg.content) ? msg.content : [];
+    const toolUses = content.filter((b) => b && typeof b === "object" && b.type === "tool_use" && typeof b.name === "string");
 
     // CONTEXT_BLOAT signal — total input on this turn.
     const totalInputThisTurn = inTok + cache5m + cache1h + cacheRead;
@@ -249,7 +252,11 @@ function parseSession(
       }
       if (name === "Agent" || name === "Task") {
         const sub = tu.input?.subagent_type;
-        if (sub) seenSubagents.add(sub);
+        if (typeof sub === "string" && sub) {
+          seenSubagents.add(sub);
+          const counts = stat.subagentInvocations!;
+          counts[sub] = (counts[sub] ?? 0) + 1;
+        }
       }
     }
   }
@@ -261,7 +268,7 @@ function parseSession(
 }
 
 function normalizeProject(encoded: string): string {
-  // "-Users-xiangjie-clawbot" → "~/clawbot"
+  // "-Users-example-project" → "~/project"
   if (!encoded.startsWith("-Users-")) return encoded;
   const rest = encoded.replace(/^-Users-[^-]+-/, "");
   return "~/" + rest.replace(/-/g, "/").replace(/^\//, "");

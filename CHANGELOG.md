@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Validate CLI arguments before scanning and report measured per-agent
+  invocation counts in routing suggestions. Global model overrides are no
+  longer presented as a risk-free way to bypass protected roles.
+- Use a public pseudonym and anonymous author attribution.
 - **Fixed**: `--days` now excludes out-of-window assistant turns from resumed
   sessions instead of counting the entire JSONL file, preventing inflated
   costs, tool metrics, and pathology findings.
